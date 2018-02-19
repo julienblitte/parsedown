@@ -983,15 +983,16 @@ class Parsedown
         '<' => array('UrlTag', 'EmailTag', 'Markup', 'SpecialCharacter'),
         '>' => array('SpecialCharacter'),
         '[' => array('Link'),
-        '_' => array('Emphasis'),
+        '_' => array('Emphasis','Underline'),
         '`' => array('Code'),
         '~' => array('Strikethrough'),
         '\\' => array('EscapeSequence'),
+        '{' => array('Spanning'),
     );
 
     # ~
 
-    protected $inlineMarkerList = '!"*_&[:<>`~\\';
+    protected $inlineMarkerList = '!"*_&[:<>`~\\{';
 
     #
     # ~
@@ -1120,7 +1121,7 @@ class Parsedown
 
         $marker = $Excerpt['text'][0];
 
-        if ($Excerpt['text'][1] === $marker and preg_match($this->StrongRegex[$marker], $Excerpt['text'], $matches))
+		if ($Excerpt['text'][1] === $marker and preg_match('/^[*]{2}((?:\\\\\*|[^*]|[*][^*]*[*])+?)[*]{2}(?![*])/s', $Excerpt['text'], $matches))
         {
             $emphasis = 'strong';
         }
@@ -1137,6 +1138,33 @@ class Parsedown
             'extent' => strlen($matches[0]),
             'element' => array(
                 'name' => $emphasis,
+                'handler' => 'line',
+                'text' => $matches[1],
+            ),
+        );
+    }
+
+    protected function inlineUnderline($Excerpt)
+    {
+        if ( ! isset($Excerpt['text'][1]))
+        {
+            return;
+        }
+
+        $marker = $Excerpt['text'][0];
+
+		if ($Excerpt['text'][1] !== $marker or !preg_match('/^__((?:\\\\_|[^_]|_[^_]*_)+?)__(?!_)/us', $Excerpt['text'], $matches))
+        {
+            return;
+        }
+
+        return array(
+            'extent' => strlen($matches[0]),
+            'element' => array(
+                'name' => 'span',
+				'attributes' => array(
+					'style' => 'text-decoration: underline'
+				),
                 'handler' => 'line',
                 'text' => $matches[1],
             ),
@@ -1378,6 +1406,39 @@ class Parsedown
         }
     }
 
+    protected function inlineSpanning($Excerpt)
+    {
+        $Element = array(
+            'name' => 'span',
+            'handler' => 'line',
+            'text' => null,
+            'attributes' => array(
+                'class' => null
+            ),
+        );
+
+        $extent = 0;
+
+        $remainder = $Excerpt['text'];
+
+        if (preg_match('/\{\s*(\w+)\s*:([^}]+)\}/', $remainder, $matches))
+		{
+            $Element['attributes']['class'] = $matches[1];
+            $Element['text'] = $matches[2];
+
+            $extent = strlen($matches[0]);
+		}
+		else
+		{
+			return;
+		}
+
+        return array(
+            'extent' => $extent,
+            'element' => $Element,
+        );
+    }
+
     # ~
 
     protected function unmarkedText($text)
@@ -1516,11 +1577,6 @@ class Parsedown
 
     protected $specialCharacters = array(
         '\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '>', '#', '+', '-', '.', '!', '|',
-    );
-
-    protected $StrongRegex = array(
-        '*' => '/^[*]{2}((?:\\\\\*|[^*]|[*][^*]*[*])+?)[*]{2}(?![*])/s',
-        '_' => '/^__((?:\\\\_|[^_]|_[^_]*_)+?)__(?!_)/us',
     );
 
     protected $EmRegex = array(
